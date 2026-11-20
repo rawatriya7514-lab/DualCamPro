@@ -552,7 +552,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onVideoRecordingSaved(file: File) {
-        Toast.makeText(this, "Video saved to Movies/DualCam", Toast.LENGTH_SHORT).show()
+        val sizeMb = String.format(java.util.Locale.US, "%.1f MB", file.length() / (1024.0 * 1024.0))
+        Toast.makeText(this, "Saved: ${file.name} ($sizeMb)", Toast.LENGTH_SHORT).show()
         updateLastVideoThumbnail()
         updateStorageInfo()
     }

@@ -112,7 +112,7 @@ class DualCameraController(
             } catch (e: Exception) {
                 Log.w(TAG, "Hardware ConcurrentCamera unavailable on this SoC HAL (${e.message}). Activating Live Dual-Take Duo engine.")
                 isHardwareDualStreamingActive = false
-                bindDualTakeDuoFallback(mode, targetSecondaryPreview)
+                bindDualTakeDuoFallback()
                 onModeChanged(mode)
             }
         }, ContextCompat.getMainExecutor(context))
@@ -122,20 +122,12 @@ class DualCameraController(
      * Live Dual-Take Duo fallback for devices where SoC HAL restricts simultaneous ISP streaming.
      * Binds active primary camera to main preview and captures high-res snapshot of opposite camera for PiP/Split view.
      */
-    private fun bindDualTakeDuoFallback(mode: LayoutMode, secondaryPreviewView: PreviewView) {
+    private fun bindDualTakeDuoFallback() {
         // Bind primary camera to main preview view
         singleCameraController.bindCamera(singleCameraController.currentLensFacing)
 
-        // Capture opposite camera frame for the secondary preview container
-        val oppositeLens = if (singleCameraController.currentLensFacing == CameraSelector.LENS_FACING_BACK) {
-            CameraSelector.LENS_FACING_FRONT
-        } else {
-            CameraSelector.LENS_FACING_BACK
-        }
-
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                // Secondary preview receives snapshot
                 val currentBmp = primaryPreview.bitmap
                 if (currentBmp != null) {
                     onSecondarySnapshotReady?.invoke(currentBmp)

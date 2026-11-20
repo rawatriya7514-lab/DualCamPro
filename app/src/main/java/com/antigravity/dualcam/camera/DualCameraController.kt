@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import android.view.View
-import android.widget.ImageView
+import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ConcurrentCamera
 import androidx.camera.core.Preview
@@ -48,16 +48,18 @@ class DualCameraController(
         if (mode == LayoutMode.SINGLE_REAR) {
             isHardwareDualStreamingActive = false
             concurrentCameraSession = null
-            singleCameraController.bindCamera(CameraSelector.LENS_FACING_BACK)
-            onModeChanged(mode)
+            singleCameraController.bindCamera(CameraSelector.LENS_FACING_BACK) {
+                onModeChanged(mode)
+            }
             return
         }
 
         if (mode == LayoutMode.SINGLE_FRONT) {
             isHardwareDualStreamingActive = false
             concurrentCameraSession = null
-            singleCameraController.bindCamera(CameraSelector.LENS_FACING_FRONT)
-            onModeChanged(mode)
+            singleCameraController.bindCamera(CameraSelector.LENS_FACING_FRONT) {
+                onModeChanged(mode)
+            }
             return
         }
 
@@ -74,13 +76,43 @@ class DualCameraController(
                 val provider = cameraProviderFuture.get()
                 provider.unbindAll()
 
-                val backSelector = CameraSelector.Builder()
-                    .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                    .build()
+                // Query CameraX availableConcurrentCameraInfos
+                val concurrentInfosList = provider.availableConcurrentCameraInfos
+                var matchingCombo: List<CameraInfo>? = null
 
-                val frontSelector = CameraSelector.Builder()
-                    .requireLensFacing(CameraSelector.LENS_FACING_FRONT)
-                    .build()
+                for (combo in concurrentInfosList) {
+                    val hasBack = combo.any { it.lensFacing == CameraSelector.LENS_FACING_BACK }
+                    val hasFront = combo.any { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+                    if (hasBack && hasFront) {
+                        matchingCombo = combo
+                        break
+                    }
+                }
+
+                val primarySelector: CameraSelector
+                val secondarySelector: CameraSelector
+
+                if (matchingCombo != null) {
+                    val backCameraInfo = matchingCombo.first { it.lensFacing == CameraSelector.LENS_FACING_BACK }
+                    val frontCameraInfo = matchingCombo.first { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
+
+                    if (mode == LayoutMode.PIP_REAR_ON_FRONT) {
+                        primarySelector = frontCameraInfo.cameraSelector
+                        secondarySelector = backCameraInfo.cameraSelector
+                    } else {
+                        primarySelector = backCameraInfo.cameraSelector
+                        secondarySelector = frontCameraInfo.cameraSelector
+                    }
+                } else {
+                    // Fallback to standard lens facing selectors
+                    if (mode == LayoutMode.PIP_REAR_ON_FRONT) {
+                        primarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
+                        secondarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+                    } else {
+                        primarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
+                        secondarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
+                    }
+                }
 
                 // Primary Preview UseCase
                 val primaryPreviewUseCase = Preview.Builder().build().also {
@@ -93,13 +125,13 @@ class DualCameraController(
                 }
 
                 val primaryConfig = ConcurrentCamera.SingleCameraConfig(
-                    backSelector,
+                    primarySelector,
                     UseCaseGroup.Builder().addUseCase(primaryPreviewUseCase).build(),
                     lifecycleOwner
                 )
 
                 val secondaryConfig = ConcurrentCamera.SingleCameraConfig(
-                    frontSelector,
+                    secondarySelector,
                     UseCaseGroup.Builder().addUseCase(secondaryPreviewUseCase).build(),
                     lifecycleOwner
                 )

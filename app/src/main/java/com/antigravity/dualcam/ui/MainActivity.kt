@@ -1,7 +1,6 @@
 package com.antigravity.dualcam.ui
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,6 +23,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
+import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -48,6 +48,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -83,18 +84,20 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Handle punch-hole camera and system navigation bar insets safely
+        // Handle punch-hole camera cutouts and system navigation bar insets safely
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { _, insets ->
             val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
 
-            // Add dynamic top margin for topBar
+            // Add dynamic top margin for topBar to clear punch-hole / notch
             val topParams = binding.topBar.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-            topParams.topMargin = (statusBars.top + 8).coerceAtLeast(32)
+            topParams.topMargin = (statusBars.top + 8).coerceAtLeast(44)
             binding.topBar.layoutParams = topParams
 
-            // Add dynamic bottom padding for bottomDeck
-            binding.bottomDeck.setPadding(0, 10, 0, (navBars.bottom + 16).coerceAtLeast(24))
+            // Add dynamic bottom padding for bottomDeck to clear gesture navigation bar
+            val bottomPadding = (navBars.bottom + 16).coerceAtLeast(24)
+            binding.bottomDeck.setPadding(0, 10, 0, bottomPadding)
+            binding.proDrawer.root.setPadding(16, 16, 16, bottomPadding)
             insets
         }
 
@@ -156,10 +159,12 @@ class MainActivity : AppCompatActivity() {
             capabilities = cameraCapabilities,
             onSecondarySnapshotReady = { bitmap ->
                 runOnUiThread {
-                    binding.ivPipSnapshot.setImageBitmap(bitmap)
-                    binding.ivPipSnapshot.visibility = View.VISIBLE
-                    binding.ivSplitSnapshot.setImageBitmap(bitmap)
-                    binding.ivSplitSnapshot.visibility = View.VISIBLE
+                    if (!dualCameraController.isHardwareDualStreamingActive) {
+                        binding.ivPipSnapshot.setImageBitmap(bitmap)
+                        binding.ivPipSnapshot.visibility = View.VISIBLE
+                        binding.ivSplitSnapshot.setImageBitmap(bitmap)
+                        binding.ivSplitSnapshot.visibility = View.VISIBLE
+                    }
                 }
             }
         )
@@ -214,12 +219,14 @@ class MainActivity : AppCompatActivity() {
             cycleNextLayoutMode()
         }
 
-        // Pro Controls Pill (Tier 1 Dock)
+        // Pro Controls Pill (Tier 1 Dock) -> Hide bottomDeck to avoid overlap!
         binding.btnPro.setOnClickListener {
+            binding.bottomDeck.visibility = View.GONE
             binding.proDrawer.root.visibility = View.VISIBLE
         }
         binding.proDrawer.btnCloseProDrawer.setOnClickListener {
             binding.proDrawer.root.visibility = View.GONE
+            binding.bottomDeck.visibility = View.VISIBLE
         }
 
         // Quick Resolution Selector
@@ -270,7 +277,7 @@ class MainActivity : AppCompatActivity() {
             cycleTimer()
         }
 
-        // Zoom Presets (0.5x, 1x, 2x, 5x)
+        // Horizontal Zoom Selector (0.5x, 1x, 2x, 5x)
         binding.btnZoomWide.setOnClickListener { applyZoom(0.5f, binding.btnZoomWide) }
         binding.btnZoom1x.setOnClickListener { applyZoom(1.0f, binding.btnZoom1x) }
         binding.btnZoom2x.setOnClickListener { applyZoom(2.0f, binding.btnZoom2x) }
@@ -365,7 +372,7 @@ class MainActivity : AppCompatActivity() {
                     val evIndex = progress - 12
                     singleCameraController.setExposure(evIndex)
                     val evFloat = evIndex * 0.166f
-                    drawer.tvEvValue.text = String.format("%+.1f EV", evFloat)
+                    drawer.tvEvValue.text = String.format(Locale.US, "%+.1f EV", evFloat)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -463,7 +470,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateZoomIndicator(ratio: Float) {
-        val label = String.format("%.1fx", ratio)
+        val label = String.format(Locale.US, "%.1fx", ratio)
         binding.btnZoom1x.text = label
     }
 
@@ -517,9 +524,9 @@ class MainActivity : AppCompatActivity() {
                 val sec = totalSec % 60
                 val hrs = min / 60
                 binding.tvRecTimer.text = if (hrs > 0) {
-                    String.format("%02d:%02d:%02d", hrs, min % 60, sec)
+                    String.format(Locale.US, "%02d:%02d:%02d", hrs, min % 60, sec)
                 } else {
-                    String.format("%02d:%02d", min, sec)
+                    String.format(Locale.US, "%02d:%02d", min, sec)
                 }
 
                 // Blink red dot
@@ -552,7 +559,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onVideoRecordingSaved(file: File) {
-        val sizeMb = String.format(java.util.Locale.US, "%.1f MB", file.length() / (1024.0 * 1024.0))
+        val sizeMb = String.format(Locale.US, "%.1f MB", file.length() / (1024.0 * 1024.0))
         Toast.makeText(this, "Saved: ${file.name} ($sizeMb)", Toast.LENGTH_SHORT).show()
         updateLastVideoThumbnail()
         updateStorageInfo()
@@ -652,7 +659,8 @@ class MainActivity : AppCompatActivity() {
     private fun cycleNextLayoutMode() {
         val next = when (currentCameraState.layoutMode) {
             LayoutMode.SINGLE_REAR -> LayoutMode.PIP_FRONT_ON_REAR
-            LayoutMode.PIP_FRONT_ON_REAR -> LayoutMode.SPLIT_HORIZONTAL
+            LayoutMode.PIP_FRONT_ON_REAR -> LayoutMode.SPLIT_VERTICAL
+            LayoutMode.SPLIT_VERTICAL -> LayoutMode.SPLIT_HORIZONTAL
             LayoutMode.SPLIT_HORIZONTAL -> LayoutMode.SINGLE_FRONT
             LayoutMode.SINGLE_FRONT -> LayoutMode.SINGLE_REAR
             else -> LayoutMode.SINGLE_REAR
@@ -660,7 +668,8 @@ class MainActivity : AppCompatActivity() {
         currentCameraState.layoutMode = next
         binding.tvActiveDualModeLabel.text = when (next) {
             LayoutMode.PIP_FRONT_ON_REAR -> "PIP"
-            LayoutMode.SPLIT_HORIZONTAL -> "SPLIT"
+            LayoutMode.SPLIT_VERTICAL -> "SPLIT V"
+            LayoutMode.SPLIT_HORIZONTAL -> "SPLIT H"
             LayoutMode.SINGLE_FRONT -> "FRONT"
             LayoutMode.SINGLE_REAR -> "DUAL"
             else -> "DUAL"
@@ -671,19 +680,78 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateLayoutVisibility(mode: LayoutMode) {
-        when {
-            mode.isPiP -> {
-                binding.pipContainer.visibility = View.VISIBLE
-                binding.secondarySplitContainer.visibility = View.GONE
+    /**
+     * Dynamically adjusts ConstraintLayout constraints to ensure genuine 50/50 split screen layouts.
+     */
+    private fun applyLayoutModeConstraints(mode: LayoutMode) {
+        val constraintSet = ConstraintSet()
+        constraintSet.clone(binding.rootContainer)
+
+        when (mode) {
+            LayoutMode.SPLIT_VERTICAL -> {
+                // Top 50% for Primary Preview
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, R.id.guidelineCenterH, ConstraintSet.TOP)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+
+                // Bottom 50% for Secondary Split View
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.TOP, R.id.guidelineCenterH, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+
+                binding.pipContainer.visibility = View.GONE
+                binding.secondarySplitContainer.visibility = View.VISIBLE
             }
-            mode.isSplit -> {
+            LayoutMode.SPLIT_HORIZONTAL, LayoutMode.CINEMATIC_SPLIT -> {
+                // Left 50% for Primary Preview
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, R.id.guidelineCenterV, ConstraintSet.START)
+
+                // Right 50% for Secondary Split View
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.START, R.id.guidelineCenterV, ConstraintSet.END)
+                constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+
                 binding.pipContainer.visibility = View.GONE
                 binding.secondarySplitContainer.visibility = View.VISIBLE
             }
             else -> {
-                binding.pipContainer.visibility = View.GONE
+                // Full Screen for Primary Preview
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+
                 binding.secondarySplitContainer.visibility = View.GONE
+                if (mode.isPiP) {
+                    binding.pipContainer.visibility = View.VISIBLE
+                } else {
+                    binding.pipContainer.visibility = View.GONE
+                }
+            }
+        }
+
+        constraintSet.applyTo(binding.rootContainer)
+    }
+
+    private fun updateLayoutVisibility(mode: LayoutMode) {
+        applyLayoutModeConstraints(mode)
+
+        if (dualCameraController.isHardwareDualStreamingActive) {
+            // Live concurrent hardware streaming -> hide all static snapshot overlays
+            binding.ivPipSnapshot.visibility = View.GONE
+            binding.ivSplitSnapshot.visibility = View.GONE
+        } else {
+            // Fallback Duo mode
+            if (mode.isPiP) {
+                binding.ivPipSnapshot.visibility = View.VISIBLE
+            } else if (mode.isSplit) {
+                binding.ivSplitSnapshot.visibility = View.VISIBLE
             }
         }
     }
@@ -744,9 +812,11 @@ class MainActivity : AppCompatActivity() {
         singleCameraController.setZoom(ratio)
         val buttons = listOf(binding.btnZoomWide, binding.btnZoom1x, binding.btnZoom2x, binding.btnZoom5x)
         for (b in buttons) {
-            b.setBackgroundResource(R.drawable.bg_glass_pill)
+            b.setBackgroundResource(android.R.color.transparent)
+            (b as? TextView)?.setTextColor(Color.parseColor("#A0A6B5"))
         }
         selectedBtn.setBackgroundResource(R.drawable.bg_glass_pill_active)
+        (selectedBtn as? TextView)?.setTextColor(Color.BLACK)
     }
 
     override fun onDestroy() {

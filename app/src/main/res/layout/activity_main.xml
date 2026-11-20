@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_black"
+    android:keepScreenOn="true">
+
+    <!-- Primary Camera Preview (CameraX PreviewView) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/primaryPreview"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:scaleType="fillCenter" />
+
+    <!-- Split Camera View (Used for Side-by-Side Split H / Split V modes) -->
+    <FrameLayout
+        android:id="@+id/secondarySplitContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/secondarySplitPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fillCenter" />
+    </FrameLayout>
+
+    <!-- Floating Draggable & Resizable PiP Window Container -->
+    <FrameLayout
+        android:id="@+id/pipContainer"
+        android:layout_width="120dp"
+        android:layout_height="180dp"
+        android:layout_marginTop="60dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_pip_frame"
+        android:clickable="true"
+        android:elevation="12dp"
+        android:focusable="true"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_margin="2dp"
+            app:cardBackgroundColor="@color/bg_black"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp">
+
+            <androidx.camera.view.PreviewView
+                android:id="@+id/pipPreview"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                app:scaleType="fillCenter" />
+
+            <!-- PiP Swap Icon Hint -->
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="6dp"
+                android:background="@drawable/bg_glass_pill"
+                android:padding="2dp"
+                android:src="@drawable/ic_flip_cam"
+                app:tint="@color/text_primary" />
+        </androidx.cardview.widget.CardView>
+    </FrameLayout>
+
+    <!-- Grid Lines Overlay View -->
+    <com.antigravity.dualcam.ui.GridOverlayView
+        android:id="@+id/gridOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="2dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Focus & Exposure Reticle View -->
+    <com.antigravity.dualcam.ui.FocusReticleView
+        android:id="@+id/focusReticle"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="3dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Top OSD Status Bar -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="28dp"
+        android:layout_marginEnd="12dp"
+        android:elevation="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- Resolution Selector Button -->
+        <TextView
+            android:id="@+id/btnResolution"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_glass_pill"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:text="1080P"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp" />
+
+        <!-- FPS Selector Button -->
+        <TextView
+            android:id="@+id/btnFps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_glass_pill"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:text="30 FPS"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp" />
+
+        <!-- Audio dB Meter Visualizer -->
+        <com.antigravity.dualcam.ui.AudioVisualizerView
+            android:id="@+id/audioVisualizer"
+            android:layout_width="70dp"
+            android:layout_height="22dp"
+            android:layout_marginStart="8dp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <!-- Hardware Dual Cam Audit Badge -->
+        <TextView
+            android:id="@+id/badgeHardwareAudit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_glass_pill"
+            android:clickable="true"
+            android:drawableStart="@drawable/ic_circle_badge"
+            android:drawablePadding="6dp"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="5dp"
+            android:text="HAL DUAL"
+            android:textColor="@color/accent_gold"
+            android:textSize="11sp" />
+
+        <!-- Storage Remaining Info -->
+        <TextView
+            android:id="@+id/tvStorageInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_glass_pill"
+            android:fontFamily="monospace"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="5dp"
+            android:text="48 GB"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Side Quick Tools Bar -->
+    <LinearLayout
+        android:id="@+id/sideToolsBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="12dp"
+        android:elevation="6dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <!-- Flash / Torch -->
+        <ImageView
+            android:id="@+id/btnTorch"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/flash_torch"
+            android:padding="8dp"
+            android:src="@drawable/ic_torch_off"
+            app:tint="@color/text_primary" />
+
+        <!-- Microphone -->
+        <ImageView
+            android:id="@+id/btnMic"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/audio"
+            android:padding="8dp"
+            android:src="@drawable/ic_mic_on"
+            app:tint="@color/text_primary" />
+
+        <!-- Grid -->
+        <ImageView
+            android:id="@+id/btnGrid"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/grid"
+            android:padding="8dp"
+            android:src="@drawable/ic_grid"
+            app:tint="@color/text_primary" />
+
+        <!-- Timer -->
+        <ImageView
+            android:id="@+id/btnTimer"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/timer"
+            android:padding="8dp"
+            android:src="@drawable/ic_timer"
+            app:tint="@color/text_primary" />
+
+        <!-- Dual-Camera Mode Switch (PiP / Split H / Split V / Single) -->
+        <ImageView
+            android:id="@+id/btnDualCamMode"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/dual_camera"
+            android:padding="8dp"
+            android:src="@drawable/ic_dual_cam"
+            app:tint="@color/text_primary" />
+    </LinearLayout>
+
+    <!-- Zoom Presets and Slider (Left Side) -->
+    <LinearLayout
+        android:id="@+id/zoomContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:elevation="6dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <TextView
+            android:id="@+id/btnZoom5x"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:background="@drawable/bg_glass_pill"
+            android:gravity="center"
+            android:text="5x"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btnZoom2x"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_glass_pill"
+            android:gravity="center"
+            android:text="2x"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btnZoom1x"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_glass_pill_active"
+            android:gravity="center"
+            android:text="1x"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnZoomWide"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_glass_pill"
+            android:gravity="center"
+            android:text="0.5"
+            android:textColor="@color/text_primary"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Center Active Recording HUD Banner -->
+    <LinearLayout
+        android:id="@+id/recordingBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_glass_pill"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageView
+            android:id="@+id/recDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:src="@drawable/ic_circle_badge" />
+
+        <TextView
+            android:id="@+id/tvRecTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="monospace"
+            android:text="00:00:00"
+            android:textColor="@color/text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <!-- Pause / Resume Button -->
+        <ImageView
+            android:id="@+id/btnPauseResume"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="12dp"
+            android:clickable="true"
+            android:contentDescription="@string/pause"
+            android:focusable="true"
+            android:src="@drawable/ic_pause"
+            app:tint="@color/text_primary" />
+    </LinearLayout>
+
+    <!-- Big Countdown Overlay (3, 2, 1) -->
+    <TextView
+        android:id="@+id/tvCountdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:elevation="15dp"
+        android:fontFamily="sans-serif-black"
+        android:textColor="@color/accent_gold"
+        android:textSize="96sp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="3" />
+
+    <!-- Lock AE/AF Indicator -->
+    <TextView
+        android:id="@+id/tvLockAeAf"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_glass_pill"
+        android:elevation="8dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="4dp"
+        android:text="AE/AF LOCKED"
+        android:textColor="@color/accent_gold"
+        android:textSize="11sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar" />
+
+    <!-- Bottom Controls Deck -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="0dp"
+        android:layout_height="130dp"
+        android:background="#A0000000"
+        android:elevation="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Gallery Thumbnail Button (Left) -->
+        <FrameLayout
+            android:id="@+id/btnGallery"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="24dp"
+            android:background="@drawable/bg_glass_card"
+            android:clickable="true"
+            android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/ivGalleryThumb"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/gallery"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_gallery"
+                app:tint="@color/text_secondary" />
+        </FrameLayout>
+
+        <!-- Templates Mode Button -->
+        <ImageView
+            android:id="@+id/btnTemplates"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="16dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/templates"
+            android:padding="8dp"
+            android:src="@drawable/ic_templates"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toEndOf="@id/btnGallery"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/text_primary" />
+
+        <!-- Master Record / Shutter Button (Center) -->
+        <FrameLayout
+            android:id="@+id/btnRecord"
+            android:layout_width="76dp"
+            android:layout_height="76dp"
+            android:clickable="true"
+            android:contentDescription="@string/record"
+            android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- Outer White Ring -->
+            <View
+                android:id="@+id/recordRing"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/btn_record_outer" />
+
+            <!-- Inner Red Circle (transforms to square when recording) -->
+            <View
+                android:id="@+id/recordInner"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center"
+                android:background="@drawable/btn_record_inner" />
+        </FrameLayout>
+
+        <!-- Pro Controls Toggle Button -->
+        <ImageView
+            android:id="@+id/btnPro"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/pro_controls"
+            android:padding="8dp"
+            android:src="@drawable/ic_pro"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnFlipCamera"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/text_primary" />
+
+        <!-- Camera Flip Button (Right) -->
+        <ImageView
+            android:id="@+id/btnFlipCamera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="24dp"
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="@string/flip_camera"
+            android:padding="10dp"
+            android:src="@drawable/ic_flip_cam"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@color/text_primary" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Pro Controls Drawer (Expandable Bottom Sheet) -->
+    <include
+        android:id="@+id/proDrawer"
+        layout="@layout/layout_pro_drawer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,30 @@
+<resources>
+    <!-- Backgrounds -->
+    <color name="bg_black">#0A0B0E</color>
+    <color name="surface_dark">#14161D</color>
+    <color name="surface_card">#1E212B</color>
+    <color name="surface_elevated">#282C38</color>
+    <color name="surface_glass">#CC14161D</color>
+
+    <!-- Accents -->
+    <color name="accent_red">#FF3B30</color>
+    <color name="accent_red_glow">#66FF3B30</color>
+    <color name="accent_red_dark">#801412</color>
+    <color name="accent_gold">#FF9F0A</color>
+    <color name="accent_blue">#0A84FF</color>
+    <color name="accent_green">#30D158</color>
+    <color name="accent_cyan">#64D2FF</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#A0A6B5</color>
+    <color name="text_tertiary">#646A7A</color>
+
+    <!-- Overlays and borders -->
+    <color name="border_subtle">#2A2F3D</color>
+    <color name="border_highlight">#0A84FF</color>
+    <color name="pip_border">#0A84FF</color>
+    <color name="reticle_color">#FF9F0A</color>
+    <color name="grid_line">#55FFFFFF</color>
+    <color name="overlay_scrim">#88000000</color>
+</resources>

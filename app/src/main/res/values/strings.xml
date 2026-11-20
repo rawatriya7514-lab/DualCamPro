@@ -1,0 +1,84 @@
+<resources>
+    <string name="app_name">DualCam Pro</string>
+
+    <!-- Camera Actions -->
+    <string name="record">Record</string>
+    <string name="stop">Stop</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="flip_camera">Flip Camera</string>
+    <string name="dual_camera">Dual Camera</string>
+    <string name="single_camera">Single Camera</string>
+    <string name="switch_layout">Switch Layout</string>
+    <string name="pro_controls">Pro Controls</string>
+    <string name="templates">Templates</string>
+    <string name="gallery">Gallery</string>
+    <string name="settings">Settings</string>
+
+    <!-- Status & Info -->
+    <string name="rec_indicator">REC</string>
+    <string name="hardware_audit">Hardware Capabilities</string>
+    <string name="concurrent_supported">Hardware Dual-Camera: ACTIVE</string>
+    <string name="concurrent_not_supported">Hardware Dual-Camera: Single HAL Session (Auto Multi-Cam Stitching Active)</string>
+    <string name="storage_info">%1$s free • %2$s</string>
+    <string name="recording_saving">Processing and saving recording…</string>
+    <string name="recording_saved">Recording saved to Movies/DualCam</string>
+
+    <!-- Controls -->
+    <string name="resolution">Resolution</string>
+    <string name="fps">FPS</string>
+    <string name="exposure">EV</string>
+    <string name="white_balance">White Balance</string>
+    <string name="focus">Focus</string>
+    <string name="iso">ISO</string>
+    <string name="shutter">Shutter</string>
+    <string name="stabilization">Stabilization</string>
+    <string name="grid">Grid</string>
+    <string name="timer">Timer</string>
+    <string name="audio">Audio</string>
+    <string name="mic_on">Microphone On</string>
+    <string name="mic_muted">Microphone Muted</string>
+    <string name="flash_torch">Torch</string>
+    <string name="lock_ae_af">Lock AE/AF</string>
+
+    <!-- Templates -->
+    <string name="template_vlog">Vlogging Mode</string>
+    <string name="template_vlog_desc">Front-facing PiP with audio optimization for personal daily vlogging.</string>
+    <string name="template_youtube">YouTube 16:9 Mode</string>
+    <string name="template_youtube_desc">Cinematic landscape 16:9, high bitrate, rule of thirds grid.</string>
+    <string name="template_reels">Instagram Reels / TikTok</string>
+    <string name="template_reels_desc">Full 9:16 vertical 1080x1920 capture with instant countdown timer.</string>
+    <string name="template_interview">Interview Mode</string>
+    <string name="template_interview_desc">50/50 Split screen balancing host and interviewee in one frame.</string>
+    <string name="template_reaction">Reaction Mode</string>
+    <string name="template_reaction_desc">70% main view with 30% circular reaction window in lower corner.</string>
+    <string name="template_travel">Travel &amp; Scenery</string>
+    <string name="template_travel_desc">Ultrawide 0.5x priority with active EIS video stabilization.</string>
+    <string name="template_podcast">Video Podcast</string>
+    <string name="template_podcast_desc">Side-by-side video with pristine 320kbps AAC studio audio leveling.</string>
+    <string name="template_tutorial">Tutorial / Walkthrough</string>
+    <string name="template_tutorial_desc">Presenter top-corner PiP with crisp manual focus lock on subject.</string>
+    <string name="template_cinematic">Cinematic 24FPS</string>
+    <string name="template_cinematic_desc">24 FPS motion blur, 2.39:1 letterbox overlays, flat color tone.</string>
+    <string name="template_dual">Dual-Cam Pro Custom</string>
+    <string name="template_dual_desc">Full manual control over front + rear cameras and compositing layouts.</string>
+
+    <!-- Gallery & Editor -->
+    <string name="video_editor">Video Editor</string>
+    <string name="trim_video">Trim Video</string>
+    <string name="merge_videos">Merge Videos</string>
+    <string name="delete_video">Delete Video</string>
+    <string name="share_video">Share Video</string>
+    <string name="rename_video">Rename</string>
+    <string name="export">Export</string>
+    <string name="start_time">Start: %1$s</string>
+    <string name="end_time">End: %1$s</string>
+    <string name="duration">Duration: %1$s</string>
+    <string name="file_size">Size: %1$s</string>
+    <string name="no_videos">No recordings yet. Tap the red button to record your first dual video!</string>
+
+    <!-- Permissions -->
+    <string name="permission_title">Permissions Required</string>
+    <string name="permission_desc">DualCam Pro requires Camera and Microphone permissions to capture high-definition dual-camera video and audio. Videos are stored locally on your device.</string>
+    <string name="grant_permissions">Grant Permissions</string>
+</resources>

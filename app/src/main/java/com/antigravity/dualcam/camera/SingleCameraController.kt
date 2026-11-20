@@ -53,15 +53,23 @@ class SingleCameraController(
     private val segmentFiles = mutableListOf<File>()
     private var currentSegmentFile: File? = null
     private var isSwitchingCameraDuringRecording = false
+    private var pendingSwitchLensFacing: Int? = null
+    private var pendingSwitchCallback: (() -> Unit)? = null
+    private var accumulatedDurationMs: Long = 0L
+    private var currentSegmentDurationMs: Long = 0L
     private var recordedDurationMs: Long = 0L
+
+    val isRecording: Boolean
+        get() = activeRecording != null
 
     fun initialize(onInitialized: () -> Unit) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
             try {
                 cameraProvider = cameraProviderFuture.get()
-                bindCamera(currentLensFacing)
-                onInitialized()
+                bindCamera(currentLensFacing) {
+                    onInitialized()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize CameraX: ${e.message}", e)
                 onError("Failed to bind camera: ${e.message}")
@@ -69,7 +77,7 @@ class SingleCameraController(
         }, ContextCompat.getMainExecutor(context))
     }
 
-    fun bindCamera(lensFacing: Int) {
+    fun bindCamera(lensFacing: Int, onComplete: (() -> Unit)? = null) {
         val provider = cameraProvider ?: return
         currentLensFacing = lensFacing
 
@@ -117,6 +125,7 @@ class SingleCameraController(
             }
 
             Log.i(TAG, "Camera bound successfully to lens $lensFacing at $activeResolution")
+            onComplete?.invoke()
         } catch (e: Exception) {
             Log.e(TAG, "Error binding camera: ${e.message}", e)
             onError("Camera error: ${e.message}")
@@ -130,7 +139,10 @@ class SingleCameraController(
         }
 
         segmentFiles.clear()
+        accumulatedDurationMs = 0L
+        currentSegmentDurationMs = 0L
         recordedDurationMs = 0L
+        isSwitchingCameraDuringRecording = false
 
         startSegmentRecording(capture)
     }
@@ -154,13 +166,15 @@ class SingleCameraController(
                 when (event) {
                     is VideoRecordEvent.Start -> {
                         if (!isSwitchingCameraDuringRecording) {
-                            onRecordingStateChanged(RecordingState.RECORDING, 0L)
+                            onRecordingStateChanged(RecordingState.RECORDING, accumulatedDurationMs)
                         }
                     }
                     is VideoRecordEvent.Status -> {
-                        val duration = event.recordingStats.recordedDurationNanos / 1_000_000L
-                        recordedDurationMs = duration
-                        onRecordingStateChanged(RecordingState.RECORDING, duration)
+                        val segmentDuration = event.recordingStats.recordedDurationNanos / 1_000_000L
+                        currentSegmentDurationMs = segmentDuration
+                        val totalDuration = accumulatedDurationMs + segmentDuration
+                        recordedDurationMs = totalDuration
+                        onRecordingStateChanged(RecordingState.RECORDING, totalDuration)
                     }
                     is VideoRecordEvent.Pause -> {
                         onRecordingStateChanged(RecordingState.PAUSED, recordedDurationMs)
@@ -171,17 +185,31 @@ class SingleCameraController(
                     is VideoRecordEvent.Finalize -> {
                         if (!event.hasError()) {
                             currentSegmentFile?.let { segmentFiles.add(it) }
+                            accumulatedDurationMs += currentSegmentDurationMs
+                            currentSegmentDurationMs = 0L
                             Log.i(TAG, "Segment finalized successfully (${currentSegmentFile?.length()} bytes)")
                         } else {
                             Log.e(TAG, "Video recording segment error: ${event.error}")
+                            currentSegmentFile?.let { if (it.exists() && it.length() > 0) segmentFiles.add(it) }
                         }
 
-                        if (isSwitchingCameraDuringRecording) {
-                            // Resume recording next segment on opposite camera
-                            isSwitchingCameraDuringRecording = false
-                            videoCapture?.let { startSegmentRecording(it) }
+                        if (isSwitchingCameraDuringRecording && pendingSwitchLensFacing != null) {
+                            val targetLens = pendingSwitchLensFacing!!
+                            pendingSwitchLensFacing = null
+
+                            // Now that previous segment is 100% cleanly finalized on disk:
+                            // Bind the new camera and immediately start the next segment!
+                            bindCamera(targetLens) {
+                                videoCapture?.let { cap ->
+                                    startSegmentRecording(cap)
+                                }
+                                isSwitchingCameraDuringRecording = false
+                                pendingSwitchCallback?.invoke()
+                                pendingSwitchCallback = null
+                            }
                         } else {
                             // User ended recording -> merge segments if needed
+                            isSwitchingCameraDuringRecording = false
                             finalizeRecordingOutput()
                         }
                     }
@@ -204,11 +232,12 @@ class SingleCameraController(
 
     fun stopRecording() {
         onRecordingStateChanged(RecordingState.FINALIZING, recordedDurationMs)
+        isSwitchingCameraDuringRecording = false
         activeRecording?.stop()
         activeRecording = null
     }
 
-    fun switchCamera() {
+    fun switchCamera(onComplete: (() -> Unit)? = null) {
         val newLens = if (currentLensFacing == CameraSelector.LENS_FACING_BACK) {
             CameraSelector.LENS_FACING_FRONT
         } else {
@@ -217,14 +246,18 @@ class SingleCameraController(
 
         if (activeRecording != null) {
             // SWITCH CAMERA WHILE RECORDING IS ACTIVE:
-            // 1. Close current segment cleanly
-            // 2. Flip lens
-            // 3. Immediately start next segment and merge upon completion!
+            // 1. Mark state that we are switching
+            // 2. Store target lens
+            // 3. Stop current active segment cleanly
+            // 4. In VideoRecordEvent.Finalize callback, add previous segment, bind new lens, and start new segment!
             isSwitchingCameraDuringRecording = true
+            pendingSwitchLensFacing = newLens
+            pendingSwitchCallback = onComplete
             activeRecording?.stop()
-            bindCamera(newLens)
         } else {
-            bindCamera(newLens)
+            bindCamera(newLens) {
+                onComplete?.invoke()
+            }
         }
     }
 
@@ -261,8 +294,8 @@ class SingleCameraController(
         camera?.cameraControl?.setZoomRatio(ratio)
     }
 
-    fun setExposure(index: Int) {
-        camera?.cameraControl?.setExposureCompensationIndex(index)
+    fun setExposure(evIndex: Int) {
+        camera?.cameraControl?.setExposureCompensationIndex(evIndex)
     }
 
     fun toggleTorch(enable: Boolean) {
@@ -279,9 +312,8 @@ class SingleCameraController(
         )
         val point = factory.createPoint(x, y)
         val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
-            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+            .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
             .build()
-
         camera?.cameraControl?.startFocusAndMetering(action)
     }
 

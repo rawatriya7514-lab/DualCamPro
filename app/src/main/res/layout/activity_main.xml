@@ -35,21 +35,41 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             app:scaleType="fillCenter" />
+
+        <ImageView
+            android:id="@+id/ivSplitSnapshot"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
     </FrameLayout>
 
-    <!-- Floating Draggable & Resizable PiP Window Container -->
+    <!-- Transition Snapshot Overlay for Seamless Live 3D Camera Switch -->
+    <ImageView
+        android:id="@+id/ivSwitchTransition"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:elevation="2dp"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Floating Draggable & Resizable PiP Window Container (Top-Left Safe Position) -->
     <FrameLayout
         android:id="@+id/pipContainer"
         android:layout_width="120dp"
         android:layout_height="180dp"
-        android:layout_marginTop="60dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="85dp"
         android:background="@drawable/bg_pip_frame"
         android:clickable="true"
         android:elevation="12dp"
         android:focusable="true"
         android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
         <androidx.cardview.widget.CardView
@@ -66,16 +86,40 @@
                 android:layout_height="match_parent"
                 app:scaleType="fillCenter" />
 
-            <!-- PiP Swap Icon Hint -->
             <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:id="@+id/ivPipSnapshot"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <!-- PiP Swap Icon Hint Badge -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_gravity="top|end"
                 android:layout_margin="6dp"
                 android:background="@drawable/bg_glass_pill"
-                android:padding="2dp"
-                android:src="@drawable/ic_flip_cam"
-                app:tint="@color/text_primary" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="3dp">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_flip_cam"
+                    app:tint="@color/accent_gold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="3dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="SWAP"
+                    android:textColor="@color/accent_gold"
+                    android:textSize="9sp" />
+            </LinearLayout>
         </androidx.cardview.widget.CardView>
     </FrameLayout>
 
@@ -84,7 +128,7 @@
         android:id="@+id/gridOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:elevation="2dp"
+        android:elevation="3dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -95,7 +139,7 @@
         android:id="@+id/focusReticle"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:elevation="3dp"
+        android:elevation="4dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -106,9 +150,9 @@
         android:id="@+id/topBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginTop="28dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginStart="14dp"
+        android:layout_marginTop="36dp"
+        android:layout_marginEnd="14dp"
         android:elevation="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -150,8 +194,8 @@
         <!-- Audio dB Meter Visualizer -->
         <com.antigravity.dualcam.ui.AudioVisualizerView
             android:id="@+id/audioVisualizer"
-            android:layout_width="70dp"
-            android:layout_height="22dp"
+            android:layout_width="65dp"
+            android:layout_height="20dp"
             android:layout_marginStart="8dp" />
 
         <View
@@ -167,12 +211,12 @@
             android:background="@drawable/bg_glass_pill"
             android:clickable="true"
             android:drawableStart="@drawable/ic_circle_badge"
-            android:drawablePadding="6dp"
+            android:drawablePadding="5dp"
             android:focusable="true"
             android:fontFamily="sans-serif-medium"
             android:paddingHorizontal="8dp"
             android:paddingVertical="5dp"
-            android:text="HAL DUAL"
+            android:text="DUAL CAM"
             android:textColor="@color/accent_gold"
             android:textSize="11sp" />
 
@@ -191,13 +235,13 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Side Quick Tools Bar -->
+    <!-- Side Quick Tools Bar (Right Edge - Flash, Mic, Grid, Timer) -->
     <LinearLayout
         android:id="@+id/sideToolsBar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="14dp"
         android:elevation="6dp"
         android:gravity="center_horizontal"
         android:orientation="vertical"
@@ -250,30 +294,18 @@
             android:padding="8dp"
             android:src="@drawable/ic_timer"
             app:tint="@color/text_primary" />
-
-        <!-- Dual-Camera Mode Switch (PiP / Split H / Split V / Single) -->
-        <ImageView
-            android:id="@+id/btnDualCamMode"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_glass_pill"
-            android:contentDescription="@string/dual_camera"
-            android:padding="8dp"
-            android:src="@drawable/ic_dual_cam"
-            app:tint="@color/text_primary" />
     </LinearLayout>
 
-    <!-- Zoom Presets and Slider (Left Side) -->
+    <!-- Zoom Presets (Left Side) -->
     <LinearLayout
         android:id="@+id/zoomContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
+        android:layout_marginStart="14dp"
         android:elevation="6dp"
         android:gravity="center"
         android:orientation="vertical"
-        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        app:layout_constraintBottom_toTopOf="@id/bottomDeck"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar">
 
@@ -327,15 +359,15 @@
         android:id="@+id/recordingBanner"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="12dp"
         android:background="@drawable/bg_glass_pill"
         android:elevation="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="7dp"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        app:layout_constraintBottom_toTopOf="@id/bottomDeck"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
@@ -353,14 +385,14 @@
             android:fontFamily="monospace"
             android:text="00:00:00"
             android:textColor="@color/text_primary"
-            android:textSize="15sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
         <!-- Pause / Resume Button -->
         <ImageView
             android:id="@+id/btnPauseResume"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:layout_marginStart="12dp"
             android:clickable="true"
             android:contentDescription="@string/pause"
@@ -390,7 +422,7 @@
         android:id="@+id/tvLockAeAf"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="10dp"
         android:background="@drawable/bg_glass_pill"
         android:elevation="8dp"
         android:paddingHorizontal="10dp"
@@ -403,114 +435,198 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/topBar" />
 
-    <!-- Bottom Controls Deck -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/bottomControls"
+    <!-- Two-Tier Bottom Controls Deck (ZERO OVERLAP GUARANTEED) -->
+    <LinearLayout
+        android:id="@+id/bottomDeck"
         android:layout_width="0dp"
-        android:layout_height="130dp"
-        android:background="#A0000000"
-        android:elevation="8dp"
+        android:layout_height="wrap_content"
+        android:background="#B8000000"
+        android:elevation="10dp"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingTop="10dp"
+        android:paddingBottom="24dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Gallery Thumbnail Button (Left) -->
-        <FrameLayout
-            android:id="@+id/btnGallery"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="24dp"
-            android:background="@drawable/bg_glass_card"
-            android:clickable="true"
-            android:focusable="true"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent">
+        <!-- Tier 1: Mode Dock (Templates / Dual Cam / Pro Controls Pills) -->
+        <LinearLayout
+            android:id="@+id/modeDock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-            <ImageView
-                android:id="@+id/ivGalleryThumb"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="@string/gallery"
-                android:scaleType="centerCrop"
-                android:src="@drawable/ic_gallery"
-                app:tint="@color/text_secondary" />
-        </FrameLayout>
+            <!-- Templates Mode Pill -->
+            <LinearLayout
+                android:id="@+id/btnTemplates"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_glass_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp">
 
-        <!-- Templates Mode Button -->
-        <ImageView
-            android:id="@+id/btnTemplates"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="16dp"
-            android:background="@drawable/bg_glass_pill"
-            android:contentDescription="@string/templates"
-            android:padding="8dp"
-            android:src="@drawable/ic_templates"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toEndOf="@id/btnGallery"
-            app:layout_constraintTop_toTopOf="parent"
-            app:tint="@color/text_primary" />
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_templates"
+                    app:tint="@color/accent_blue" />
 
-        <!-- Master Record / Shutter Button (Center) -->
-        <FrameLayout
-            android:id="@+id/btnRecord"
-            android:layout_width="76dp"
-            android:layout_height="76dp"
-            android:clickable="true"
-            android:contentDescription="@string/record"
-            android:focusable="true"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent">
+                <TextView
+                    android:id="@+id/tvActiveTemplateLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="TEMPLATES"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
-            <!-- Outer White Ring -->
-            <View
-                android:id="@+id/recordRing"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/btn_record_outer" />
+            <!-- Dual-Camera Layout Switch Pill -->
+            <LinearLayout
+                android:id="@+id/btnDualCamMode"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_glass_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp">
 
-            <!-- Inner Red Circle (transforms to square when recording) -->
-            <View
-                android:id="@+id/recordInner"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
-                android:layout_gravity="center"
-                android:background="@drawable/btn_record_inner" />
-        </FrameLayout>
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_dual_cam"
+                    app:tint="@color/accent_gold" />
 
-        <!-- Pro Controls Toggle Button -->
-        <ImageView
-            android:id="@+id/btnPro"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="16dp"
-            android:background="@drawable/bg_glass_pill"
-            android:contentDescription="@string/pro_controls"
-            android:padding="8dp"
-            android:src="@drawable/ic_pro"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btnFlipCamera"
-            app:layout_constraintTop_toTopOf="parent"
-            app:tint="@color/text_primary" />
+                <TextView
+                    android:id="@+id/tvActiveDualModeLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="DUAL CAM"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
-        <!-- Camera Flip Button (Right) -->
-        <ImageView
-            android:id="@+id/btnFlipCamera"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="24dp"
-            android:background="@drawable/bg_glass_pill"
-            android:contentDescription="@string/flip_camera"
-            android:padding="10dp"
-            android:src="@drawable/ic_flip_cam"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:tint="@color/text_primary" />
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <!-- Pro Controls Pill -->
+            <LinearLayout
+                android:id="@+id/btnPro"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_glass_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_pro"
+                    app:tint="@color/accent_cyan" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="PRO"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Tier 2: Shutter Action Row (Gallery Far-Left, Record Dead-Center, Flip Far-Right) -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/shutterRow"
+            android:layout_width="match_parent"
+            android:layout_height="86dp"
+            android:layout_marginTop="8dp">
+
+            <!-- Gallery Thumbnail Button (Far Left) -->
+            <FrameLayout
+                android:id="@+id/btnGallery"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_marginStart="28dp"
+                android:background="@drawable/bg_glass_card"
+                android:clickable="true"
+                android:focusable="true"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <ImageView
+                    android:id="@+id/ivGalleryThumb"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@string/gallery"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_gallery"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
+
+            <!-- Master Record / Shutter Button (Dead Center) -->
+            <FrameLayout
+                android:id="@+id/btnRecord"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:clickable="true"
+                android:contentDescription="@string/record"
+                android:focusable="true"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <!-- Outer White Ring -->
+                <View
+                    android:id="@+id/recordRing"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/btn_record_outer" />
+
+                <!-- Inner Red Circle -->
+                <View
+                    android:id="@+id/recordInner"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/btn_record_inner" />
+            </FrameLayout>
+
+            <!-- Camera Flip Button (Far Right) -->
+            <FrameLayout
+                android:id="@+id/btnFlipCamera"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_marginEnd="28dp"
+                android:background="@drawable/bg_glass_pill"
+                android:clickable="true"
+                android:focusable="true"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent">
+
+                <ImageView
+                    android:id="@+id/ivFlipIcon"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/flip_camera"
+                    android:src="@drawable/ic_flip_cam"
+                    app:tint="@color/text_primary" />
+            </FrameLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </LinearLayout>
 
     <!-- Pro Controls Drawer (Expandable Bottom Sheet) -->
     <include

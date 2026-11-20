@@ -7,22 +7,26 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.media.ToneGenerator
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.os.StatFs
+import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
+import android.widget.ImageView
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -34,7 +38,6 @@ import com.antigravity.dualcam.camera.SingleCameraController
 import com.antigravity.dualcam.databinding.ActivityMainBinding
 import com.antigravity.dualcam.model.CameraState
 import com.antigravity.dualcam.model.CameraState.GridStyle
-import com.antigravity.dualcam.model.CameraState.VideoResolution
 import com.antigravity.dualcam.model.LayoutMode
 import com.antigravity.dualcam.model.RecordingState
 import com.antigravity.dualcam.recorder.AudioLevelMonitor
@@ -47,6 +50,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var singleCameraController: SingleCameraController
     private lateinit var dualCameraController: DualCameraController
@@ -57,6 +61,10 @@ class MainActivity : AppCompatActivity() {
     private var currentRecordingState = RecordingState.IDLE
     private var countdownJob: Job? = null
     private var toneGen: ToneGenerator? = null
+
+    private var currentZoomRatio = 1.0f
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private lateinit var gestureDetector: GestureDetector
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -74,6 +82,21 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Handle punch-hole camera and system navigation bar insets safely
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { _, insets ->
+            val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+
+            // Add dynamic top margin for topBar
+            val topParams = binding.topBar.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            topParams.topMargin = (statusBars.top + 8).coerceAtLeast(32)
+            binding.topBar.layoutParams = topParams
+
+            // Add dynamic bottom padding for bottomDeck
+            binding.bottomDeck.setPadding(0, 10, 0, (navBars.bottom + 16).coerceAtLeast(24))
+            insets
+        }
 
         try {
             toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
@@ -127,9 +150,18 @@ class MainActivity : AppCompatActivity() {
             context = this,
             lifecycleOwner = this,
             primaryPreview = binding.primaryPreview,
-            secondaryPreview = binding.pipPreview,
+            pipPreview = binding.pipPreview,
+            splitPreview = binding.secondarySplitPreview,
             singleCameraController = singleCameraController,
-            capabilities = cameraCapabilities
+            capabilities = cameraCapabilities,
+            onSecondarySnapshotReady = { bitmap ->
+                runOnUiThread {
+                    binding.ivPipSnapshot.setImageBitmap(bitmap)
+                    binding.ivPipSnapshot.visibility = View.VISIBLE
+                    binding.ivSplitSnapshot.setImageBitmap(bitmap)
+                    binding.ivSplitSnapshot.visibility = View.VISIBLE
+                }
+            }
         )
 
         // 3. Initialize CameraX
@@ -151,7 +183,7 @@ class MainActivity : AppCompatActivity() {
         // 5. Wire UI controls
         setupPrimaryControls()
         setupProDrawerControls()
-        setupTouchFocus()
+        setupTouchFocusAndGestures()
         setupPiPInteraction()
     }
 
@@ -167,19 +199,27 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Camera Flip Button (One-tap front/back switch, seamless during recording!)
+        // Camera Flip Button (Live 3D seamless flip transition)
         binding.btnFlipCamera.setOnClickListener {
-            // Animate flip icon rotation
-            ObjectAnimator.ofFloat(binding.btnFlipCamera, "rotation", 0f, 180f).apply {
-                duration = 300
-                start()
-            }
-            singleCameraController.switchCamera()
+            performLiveCameraSwitch()
         }
 
-        // Dual-Camera Layout Switcher (PiP -> Split H -> Single)
+        // Templates Mode Pill (Tier 1 Dock)
+        binding.btnTemplates.setOnClickListener {
+            showTemplatesDialog()
+        }
+
+        // Dual-Camera Layout Switcher Pill (Tier 1 Dock)
         binding.btnDualCamMode.setOnClickListener {
             cycleNextLayoutMode()
+        }
+
+        // Pro Controls Pill (Tier 1 Dock)
+        binding.btnPro.setOnClickListener {
+            binding.proDrawer.root.visibility = View.VISIBLE
+        }
+        binding.proDrawer.btnCloseProDrawer.setOnClickListener {
+            binding.proDrawer.root.visibility = View.GONE
         }
 
         // Quick Resolution Selector
@@ -236,22 +276,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnZoom2x.setOnClickListener { applyZoom(2.0f, binding.btnZoom2x) }
         binding.btnZoom5x.setOnClickListener { applyZoom(5.0f, binding.btnZoom5x) }
 
-        // Templates Modal
-        binding.btnTemplates.setOnClickListener {
-            showTemplatesDialog()
-        }
-
         // Hardware Audit Badge
         binding.badgeHardwareAudit.setOnClickListener {
             showHardwareAuditDialog()
-        }
-
-        // Pro Controls Drawer
-        binding.btnPro.setOnClickListener {
-            binding.proDrawer.root.visibility = View.VISIBLE
-        }
-        binding.proDrawer.btnCloseProDrawer.setOnClickListener {
-            binding.proDrawer.root.visibility = View.GONE
         }
 
         // Gallery Button
@@ -267,6 +294,63 @@ class MainActivity : AppCompatActivity() {
                 singleCameraController.resumeRecording()
             }
         }
+    }
+
+    /**
+     * Executes an ultra-smooth, cinematic 3D card flip transition between camera lenses.
+     * Prevents black screens, flickering, and dropped frames during both preview and active recording.
+     */
+    private fun performLiveCameraSwitch() {
+        // 1. Capture snapshot of current frame
+        val snapshot = binding.primaryPreview.bitmap
+        if (snapshot != null) {
+            binding.ivSwitchTransition.setImageBitmap(snapshot)
+            binding.ivSwitchTransition.visibility = View.VISIBLE
+            binding.ivSwitchTransition.alpha = 1f
+            binding.ivSwitchTransition.rotationY = 0f
+            binding.ivSwitchTransition.scaleX = 1f
+            binding.ivSwitchTransition.scaleY = 1f
+        }
+
+        // 2. Animate flip icon rotation
+        binding.ivFlipIcon.animate()
+            .rotationBy(180f)
+            .setDuration(350)
+            .start()
+
+        // 3. Set camera distance perspective for 3D card rotation
+        val distance = 6000f * resources.displayMetrics.density
+        binding.ivSwitchTransition.cameraDistance = distance
+        binding.primaryPreview.cameraDistance = distance
+
+        // 4. Animate flip 0 -> 90 degrees (folding away)
+        binding.ivSwitchTransition.animate()
+            .rotationY(90f)
+            .scaleX(0.92f)
+            .scaleY(0.92f)
+            .setDuration(160)
+            .withEndAction {
+                // At apex of fold (invisible), trigger camera switch
+                singleCameraController.switchCamera {
+                    runOnUiThread {
+                        // 5. Unfold from -90 -> 0 degrees displaying new live feed
+                        binding.ivSwitchTransition.rotationY = -90f
+                        binding.ivSwitchTransition.animate()
+                            .rotationY(0f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .alpha(0f)
+                            .setDuration(160)
+                            .withEndAction {
+                                binding.ivSwitchTransition.visibility = View.GONE
+                                binding.ivSwitchTransition.alpha = 1f
+                                binding.ivSwitchTransition.rotationY = 0f
+                            }
+                            .start()
+                    }
+                }
+            }
+            .start()
     }
 
     private fun setupProDrawerControls() {
@@ -320,22 +404,11 @@ class MainActivity : AppCompatActivity() {
             btn.setOnClickListener {
                 for (b in wbButtons) {
                     b.setBackgroundResource(R.drawable.bg_glass_pill)
-                    b.setTextColor(resources.getColor(R.color.text_secondary, null))
+                    b.setTextColor(Color.WHITE)
                 }
                 btn.setBackgroundResource(R.drawable.bg_glass_pill_active)
-                btn.setTextColor(Color.WHITE)
-            }
-        }
-
-        // EIS Stabilization Toggle
-        drawer.btnToggleStabilization.setOnClickListener {
-            currentCameraState.isStabilizationOn = !currentCameraState.isStabilizationOn
-            if (currentCameraState.isStabilizationOn) {
-                drawer.btnToggleStabilization.text = "EIS STABILIZATION: ON"
-                drawer.btnToggleStabilization.setTextColor(Color.parseColor("#0A84FF"))
-            } else {
-                drawer.btnToggleStabilization.text = "EIS STABILIZATION: OFF"
-                drawer.btnToggleStabilization.setTextColor(Color.parseColor("#A0A6B5"))
+                btn.setTextColor(Color.BLACK)
+                Toast.makeText(this, "White Balance: ${btn.text}", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -354,23 +427,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupTouchFocus() {
-        binding.primaryPreview.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP) {
-                val x = event.x
-                val y = event.y
+    private fun setupTouchFocusAndGestures() {
+        scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                currentZoomRatio = (currentZoomRatio * detector.scaleFactor).coerceIn(
+                    cameraCapabilities.minZoomRatio,
+                    cameraCapabilities.maxZoomRatio
+                )
+                singleCameraController.setZoom(currentZoomRatio)
+                updateZoomIndicator(currentZoomRatio)
+                return true
+            }
+        })
+
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                val x = e.x
+                val y = e.y
                 singleCameraController.tapToFocus(x, y)
                 binding.focusReticle.showAt(x, y)
+                return true
             }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                performLiveCameraSwitch()
+                return true
+            }
+        })
+
+        binding.primaryPreview.setOnTouchListener { _, event ->
+            scaleGestureDetector.onTouchEvent(event)
+            gestureDetector.onTouchEvent(event)
             true
         }
+    }
+
+    private fun updateZoomIndicator(ratio: Float) {
+        val label = String.format("%.1fx", ratio)
+        binding.btnZoom1x.text = label
     }
 
     private fun setupPiPInteraction() {
         // PiP dragging and tap-to-swap
         binding.pipContainer.setOnTouchListener(PipTouchListener {
             // Tap on PiP -> swap main and PiP cameras
-            singleCameraController.switchCamera()
+            performLiveCameraSwitch()
             Toast.makeText(this, "Swapped Primary & Secondary Cameras", Toast.LENGTH_SHORT).show()
         })
     }
@@ -469,20 +570,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateStorageInfo() {
+        val freeBytes = MediaStoreHelper.getAvailableStorageBytes(this)
+        val freeGb = freeBytes / (1024L * 1024L * 1024L)
+        binding.tvStorageInfo.text = "$freeGb GB"
+    }
+
     private fun updateHardwareAuditBadge() {
         if (cameraCapabilities.isConcurrentDualCameraSupported) {
             binding.badgeHardwareAudit.text = "HAL DUAL: ACTIVE"
             binding.badgeHardwareAudit.setTextColor(Color.parseColor("#30D158"))
         } else {
-            binding.badgeHardwareAudit.text = "HAL: MULTI-CAM"
+            binding.badgeHardwareAudit.text = "DUAL CAM"
             binding.badgeHardwareAudit.setTextColor(Color.parseColor("#FF9F0A"))
         }
     }
 
     private fun showHardwareAuditDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_hardware_audit, null)
-        val tvReport = dialogView.findViewById<android.widget.TextView>(R.id.tvAuditReport)
-        val btnClose = dialogView.findViewById<android.widget.ImageView>(R.id.btnCloseAudit)
+        val tvReport = dialogView.findViewById<TextView>(R.id.tvAuditReport)
+        val btnClose = dialogView.findViewById<ImageView>(R.id.btnCloseAudit)
         val btnOk = dialogView.findViewById<android.widget.Button>(R.id.btnOkAudit)
 
         tvReport.text = cameraCapabilities.hardwareAuditReport
@@ -500,7 +607,7 @@ class MainActivity : AppCompatActivity() {
     private fun showTemplatesDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_templates, null)
         val rv = dialogView.findViewById<RecyclerView>(R.id.rvTemplates)
-        val btnClose = dialogView.findViewById<android.widget.ImageView>(R.id.btnCloseTemplates)
+        val btnClose = dialogView.findViewById<ImageView>(R.id.btnCloseTemplates)
 
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
@@ -526,6 +633,7 @@ class MainActivity : AppCompatActivity() {
         currentCameraState.isStabilizationOn = template.isStabilizationEnabled
         currentCameraState.isMicEnabled = template.isMicEnabled
 
+        binding.tvActiveTemplateLabel.text = template.title.split(" ")[0].uppercase()
         binding.btnResolution.text = template.resolution.label.split(" ")[0]
         binding.btnFps.text = "${template.targetFps} FPS"
         binding.gridOverlay.gridStyle = template.gridStyle
@@ -549,6 +657,14 @@ class MainActivity : AppCompatActivity() {
             else -> LayoutMode.SINGLE_REAR
         }
         currentCameraState.layoutMode = next
+        binding.tvActiveDualModeLabel.text = when (next) {
+            LayoutMode.PIP_FRONT_ON_REAR -> "PIP"
+            LayoutMode.SPLIT_HORIZONTAL -> "SPLIT"
+            LayoutMode.SINGLE_FRONT -> "FRONT"
+            LayoutMode.SINGLE_REAR -> "DUAL"
+            else -> "DUAL"
+        }
+
         dualCameraController.setLayoutMode(next) { mode ->
             updateLayoutVisibility(mode)
         }
@@ -578,69 +694,63 @@ class MainActivity : AppCompatActivity() {
         currentCameraState.resolution = next
         singleCameraController.activeResolution = next
         binding.btnResolution.text = next.label.split(" ")[0]
+        singleCameraController.bindCamera(singleCameraController.currentLensFacing)
         Toast.makeText(this, "Resolution: ${next.label}", Toast.LENGTH_SHORT).show()
     }
 
     private fun cycleFps() {
-        val fpsList = cameraCapabilities.supportedFps
-        val currentIdx = fpsList.indexOf(currentCameraState.fps)
-        val next = fpsList[(currentIdx + 1) % fpsList.size]
+        val supported = cameraCapabilities.supportedFps.sorted()
+        val currentIdx = supported.indexOf(currentCameraState.fps)
+        val next = supported[(currentIdx + 1) % supported.size]
         currentCameraState.fps = next
         binding.btnFps.text = "$next FPS"
-        Toast.makeText(this, "Frame Rate: $next FPS", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Framerate: $next FPS", Toast.LENGTH_SHORT).show()
     }
 
     private fun cycleGridStyle() {
-        val styles = GridStyle.values()
-        val next = styles[(currentCameraState.gridStyle.ordinal + 1) % styles.size]
-        currentCameraState.gridStyle = next
+        val next = when (binding.gridOverlay.gridStyle) {
+            GridStyle.OFF -> GridStyle.RULE_OF_THIRDS
+            GridStyle.RULE_OF_THIRDS -> GridStyle.GOLDEN_RATIO
+            GridStyle.GOLDEN_RATIO -> GridStyle.CROSSHAIR
+            GridStyle.CROSSHAIR -> GridStyle.SQUARE
+            GridStyle.SQUARE -> GridStyle.OFF
+        }
         binding.gridOverlay.gridStyle = next
-        Toast.makeText(this, "Grid: ${next.label}", Toast.LENGTH_SHORT).show()
+        val name = when (next) {
+            GridStyle.OFF -> "Grid: OFF"
+            GridStyle.RULE_OF_THIRDS -> "Grid: 3x3 (Rule of Thirds)"
+            GridStyle.GOLDEN_RATIO -> "Grid: Golden Ratio"
+            GridStyle.CROSSHAIR -> "Grid: Crosshair Center"
+            GridStyle.SQUARE -> "Grid: 1:1 Square Framing"
+        }
+        Toast.makeText(this, name, Toast.LENGTH_SHORT).show()
     }
 
     private fun cycleTimer() {
-        val timers = listOf(0, 3, 5, 10)
-        val currentIdx = timers.indexOf(currentCameraState.timerSeconds)
-        val next = timers[(currentIdx + 1) % timers.size]
-        currentCameraState.timerSeconds = next
-        if (next > 0) {
-            binding.btnTimer.imageTintList = ColorStateList.valueOf(Color.parseColor("#FF9F0A"))
-            Toast.makeText(this, "Timer: ${next}s", Toast.LENGTH_SHORT).show()
-        } else {
-            binding.btnTimer.imageTintList = ColorStateList.valueOf(Color.WHITE)
-            Toast.makeText(this, "Timer: OFF", Toast.LENGTH_SHORT).show()
+        val next = when (currentCameraState.timerSeconds) {
+            0 -> 3
+            3 -> 5
+            5 -> 10
+            else -> 0
         }
+        currentCameraState.timerSeconds = next
+        val label = if (next == 0) "Timer: OFF" else "Timer: ${next}s delay"
+        Toast.makeText(this, label, Toast.LENGTH_SHORT).show()
     }
 
-    private fun applyZoom(ratio: Float, selectedBtn: android.widget.TextView) {
-        val zoomButtons = listOf(binding.btnZoomWide, binding.btnZoom1x, binding.btnZoom2x, binding.btnZoom5x)
-        for (btn in zoomButtons) {
-            btn.setBackgroundResource(R.drawable.bg_glass_pill)
-            btn.setTextColor(resources.getColor(R.color.text_primary, null))
+    private fun applyZoom(ratio: Float, selectedBtn: View) {
+        currentZoomRatio = ratio
+        singleCameraController.setZoom(ratio)
+        val buttons = listOf(binding.btnZoomWide, binding.btnZoom1x, binding.btnZoom2x, binding.btnZoom5x)
+        for (b in buttons) {
+            b.setBackgroundResource(R.drawable.bg_glass_pill)
         }
         selectedBtn.setBackgroundResource(R.drawable.bg_glass_pill_active)
-        selectedBtn.setTextColor(Color.WHITE)
-
-        singleCameraController.setZoom(ratio)
-    }
-
-    private fun updateStorageInfo() {
-        try {
-            val stat = StatFs(Environment.getExternalStorageDirectory().path)
-            val bytesAvailable = stat.availableBlocksLong * stat.blockSizeLong
-            val gb = bytesAvailable / (1024.0 * 1024 * 1024)
-            // Estimate at 20 Mbps (approx 9GB per hour)
-            val hoursLeft = (gb / 9.0).coerceAtLeast(0.1)
-            binding.tvStorageInfo.text = String.format("%.0f GB • ~%.1fh", gb, hoursLeft)
-        } catch (e: Exception) {
-            binding.tvStorageInfo.text = "Storage OK"
-        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         audioLevelMonitor?.stop()
         toneGen?.release()
-        toneGen = null
     }
 }

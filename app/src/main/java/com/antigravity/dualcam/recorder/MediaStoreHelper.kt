@@ -28,6 +28,11 @@ object MediaStoreHelper {
     private const val TAG = "MediaStoreHelper"
     private const val RELATIVE_SUBFOLDER = "Movies/DualCam"
 
+    fun getAvailableStorageBytes(context: Context): Long {
+        val path = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+        return path.freeSpace
+    }
+
     fun createOutputVideoFile(context: Context): File {
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val fileName = "DUAL_${timeStamp}.mp4"

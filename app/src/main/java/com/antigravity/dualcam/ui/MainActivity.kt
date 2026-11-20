@@ -39,6 +39,7 @@ import com.antigravity.dualcam.databinding.ActivityMainBinding
 import com.antigravity.dualcam.model.CameraState
 import com.antigravity.dualcam.model.CameraState.GridStyle
 import com.antigravity.dualcam.model.LayoutMode
+import com.antigravity.dualcam.model.PiPConfig
 import com.antigravity.dualcam.model.RecordingState
 import com.antigravity.dualcam.recorder.AudioLevelMonitor
 import com.antigravity.dualcam.recorder.MediaStoreHelper
@@ -164,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                         binding.ivPipSnapshot.visibility = View.VISIBLE
                         binding.ivSplitSnapshot.setImageBitmap(bitmap)
                         binding.ivSplitSnapshot.visibility = View.VISIBLE
+                        binding.splitInteractiveOverlay.visibility = View.GONE
                     }
                 }
             }
@@ -301,6 +303,12 @@ class MainActivity : AppCompatActivity() {
                 singleCameraController.resumeRecording()
             }
         }
+
+        // Secondary Split Screen window tap -> swap camera angles interactively!
+        binding.secondarySplitContainer.setOnClickListener {
+            performLiveCameraSwitch()
+            Toast.makeText(this, "Switched active camera angle", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /**
@@ -308,7 +316,7 @@ class MainActivity : AppCompatActivity() {
      * Prevents black screens, flickering, and dropped frames during both preview and active recording.
      */
     private fun performLiveCameraSwitch() {
-        // 1. Capture snapshot of current frame
+        // 1. Capture snapshot of current frame before switching
         val snapshot = binding.primaryPreview.bitmap
         if (snapshot != null) {
             binding.ivSwitchTransition.setImageBitmap(snapshot)
@@ -317,6 +325,13 @@ class MainActivity : AppCompatActivity() {
             binding.ivSwitchTransition.rotationY = 0f
             binding.ivSwitchTransition.scaleX = 1f
             binding.ivSwitchTransition.scaleY = 1f
+
+            // Update secondary snapshot so the opposite angle displays this frame
+            binding.ivPipSnapshot.setImageBitmap(snapshot)
+            binding.ivSplitSnapshot.setImageBitmap(snapshot)
+            binding.ivPipSnapshot.visibility = View.VISIBLE
+            binding.ivSplitSnapshot.visibility = View.VISIBLE
+            binding.splitInteractiveOverlay.visibility = View.GONE
         }
 
         // 2. Animate flip icon rotation
@@ -479,7 +494,7 @@ class MainActivity : AppCompatActivity() {
         binding.pipContainer.setOnTouchListener(PipTouchListener {
             // Tap on PiP -> swap main and PiP cameras
             performLiveCameraSwitch()
-            Toast.makeText(this, "Swapped Primary & Secondary Cameras", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Swapped Primary & PiP Camera", Toast.LENGTH_SHORT).show()
         })
     }
 
@@ -625,8 +640,8 @@ class MainActivity : AppCompatActivity() {
 
         rv.layoutManager = LinearLayoutManager(this)
         rv.adapter = TemplatesAdapter(TemplateManager.templates) { selectedTemplate ->
-            applyTemplate(selectedTemplate)
             dialog.dismiss()
+            applyTemplate(selectedTemplate)
         }
 
         btnClose.setOnClickListener { dialog.dismiss() }
@@ -634,6 +649,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTemplate(template: RecordingTemplate) {
+        currentCameraState.layoutMode = template.layoutMode
         currentCameraState.resolution = template.resolution
         currentCameraState.fps = template.targetFps
         currentCameraState.gridStyle = template.gridStyle
@@ -641,19 +657,75 @@ class MainActivity : AppCompatActivity() {
         currentCameraState.isStabilizationOn = template.isStabilizationEnabled
         currentCameraState.isMicEnabled = template.isMicEnabled
 
+        // Update OSD Labels
         binding.tvActiveTemplateLabel.text = template.title.split(" ")[0].uppercase()
         binding.btnResolution.text = template.resolution.label.split(" ")[0]
         binding.btnFps.text = "${template.targetFps} FPS"
         binding.gridOverlay.gridStyle = template.gridStyle
 
+        // Update Dual Cam Mode Dock Label
+        binding.tvActiveDualModeLabel.text = when (template.layoutMode) {
+            LayoutMode.PIP_FRONT_ON_REAR, LayoutMode.PIP_REAR_ON_FRONT -> "PIP"
+            LayoutMode.SPLIT_VERTICAL -> "SPLIT V"
+            LayoutMode.SPLIT_HORIZONTAL, LayoutMode.CINEMATIC_SPLIT -> "SPLIT H"
+            LayoutMode.SINGLE_FRONT -> "FRONT"
+            LayoutMode.SINGLE_REAR -> "REAR"
+        }
+
+        // Apply Zoom preset (Travel mode sets 0.5x ultrawide, others default to 1.0x)
+        if (template.id == RecordingTemplate.TemplateId.TRAVEL) {
+            applyZoom(0.5f, binding.btnZoomWide)
+        } else {
+            applyZoom(1.0f, binding.btnZoom1x)
+        }
+
+        // Apply PiP position if PiP mode
+        if (template.layoutMode.isPiP) {
+            applyPiPPosition(template.pipConfig)
+        }
+
+        // Configure Camera Settings
         singleCameraController.activeResolution = template.resolution
         singleCameraController.isMicEnabled = template.isMicEnabled
 
+        // Camera lens facing switch if single front or single rear requested
+        if (template.layoutMode == LayoutMode.SINGLE_FRONT && singleCameraController.currentLensFacing != CameraSelector.LENS_FACING_FRONT) {
+            performLiveCameraSwitch()
+        } else if (template.layoutMode == LayoutMode.SINGLE_REAR && singleCameraController.currentLensFacing != CameraSelector.LENS_FACING_BACK) {
+            performLiveCameraSwitch()
+        }
+
+        // Apply Layout Mode via DualCameraController
         dualCameraController.setLayoutMode(template.layoutMode) { mode ->
             updateLayoutVisibility(mode)
         }
 
-        Toast.makeText(this, "Applied ${template.title}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Applied: ${template.title}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun applyPiPPosition(config: PiPConfig) {
+        val rootW = binding.rootContainer.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val rootH = binding.rootContainer.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val pipW = (120 * resources.displayMetrics.density).toInt()
+        val pipH = (180 * resources.displayMetrics.density).toInt()
+
+        val targetX = when (config.corner) {
+            PiPConfig.PiPCorner.TOP_LEFT, PiPConfig.PiPCorner.BOTTOM_LEFT -> 16f * resources.displayMetrics.density
+            PiPConfig.PiPCorner.TOP_RIGHT, PiPConfig.PiPCorner.BOTTOM_RIGHT -> (rootW - pipW - 16 * resources.displayMetrics.density).toFloat()
+            else -> (rootW - pipW - 16 * resources.displayMetrics.density).toFloat()
+        }
+
+        val targetY = when (config.corner) {
+            PiPConfig.PiPCorner.TOP_LEFT, PiPConfig.PiPCorner.TOP_RIGHT -> 88f * resources.displayMetrics.density
+            PiPConfig.PiPCorner.BOTTOM_LEFT, PiPConfig.PiPCorner.BOTTOM_RIGHT -> (rootH - pipH - 180 * resources.displayMetrics.density).toFloat()
+            else -> 88f * resources.displayMetrics.density
+        }
+
+        binding.pipContainer.animate()
+            .x(targetX)
+            .y(targetY)
+            .setDuration(250)
+            .start()
     }
 
     private fun cycleNextLayoutMode() {
@@ -671,7 +743,7 @@ class MainActivity : AppCompatActivity() {
             LayoutMode.SPLIT_VERTICAL -> "SPLIT V"
             LayoutMode.SPLIT_HORIZONTAL -> "SPLIT H"
             LayoutMode.SINGLE_FRONT -> "FRONT"
-            LayoutMode.SINGLE_REAR -> "DUAL"
+            LayoutMode.SINGLE_REAR -> "REAR"
             else -> "DUAL"
         }
 
@@ -690,42 +762,57 @@ class MainActivity : AppCompatActivity() {
         when (mode) {
             LayoutMode.SPLIT_VERTICAL -> {
                 // Top 50% for Primary Preview
+                constraintSet.clear(R.id.primaryPreview)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, R.id.guidelineCenterH, ConstraintSet.TOP)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.constrainWidth(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.constrainHeight(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
 
                 // Bottom 50% for Secondary Split View
+                constraintSet.clear(R.id.secondarySplitContainer)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.TOP, R.id.guidelineCenterH, ConstraintSet.BOTTOM)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.constrainWidth(R.id.secondarySplitContainer, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.constrainHeight(R.id.secondarySplitContainer, ConstraintSet.MATCH_CONSTRAINT)
 
                 binding.pipContainer.visibility = View.GONE
                 binding.secondarySplitContainer.visibility = View.VISIBLE
             }
             LayoutMode.SPLIT_HORIZONTAL, LayoutMode.CINEMATIC_SPLIT -> {
                 // Left 50% for Primary Preview
+                constraintSet.clear(R.id.primaryPreview)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, R.id.guidelineCenterV, ConstraintSet.START)
+                constraintSet.constrainWidth(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.constrainHeight(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
 
                 // Right 50% for Secondary Split View
+                constraintSet.clear(R.id.secondarySplitContainer)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.START, R.id.guidelineCenterV, ConstraintSet.END)
                 constraintSet.connect(R.id.secondarySplitContainer, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.constrainWidth(R.id.secondarySplitContainer, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.constrainHeight(R.id.secondarySplitContainer, ConstraintSet.MATCH_CONSTRAINT)
 
                 binding.pipContainer.visibility = View.GONE
                 binding.secondarySplitContainer.visibility = View.VISIBLE
             }
             else -> {
                 // Full Screen for Primary Preview
+                constraintSet.clear(R.id.primaryPreview)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
                 constraintSet.connect(R.id.primaryPreview, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.constrainWidth(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.constrainHeight(R.id.primaryPreview, ConstraintSet.MATCH_CONSTRAINT)
 
                 binding.secondarySplitContainer.visibility = View.GONE
                 if (mode.isPiP) {
@@ -746,12 +833,16 @@ class MainActivity : AppCompatActivity() {
             // Live concurrent hardware streaming -> hide all static snapshot overlays
             binding.ivPipSnapshot.visibility = View.GONE
             binding.ivSplitSnapshot.visibility = View.GONE
+            binding.splitInteractiveOverlay.visibility = View.GONE
         } else {
-            // Fallback Duo mode
+            // Dual-Angle Interactive mode
             if (mode.isPiP) {
-                binding.ivPipSnapshot.visibility = View.VISIBLE
+                binding.pipContainer.visibility = View.VISIBLE
             } else if (mode.isSplit) {
-                binding.ivSplitSnapshot.visibility = View.VISIBLE
+                binding.secondarySplitContainer.visibility = View.VISIBLE
+                if (binding.ivSplitSnapshot.drawable == null) {
+                    binding.splitInteractiveOverlay.visibility = View.VISIBLE
+                }
             }
         }
     }

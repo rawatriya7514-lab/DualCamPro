@@ -14,6 +14,7 @@ class TemplatesAdapter(
 ) : RecyclerView.Adapter<TemplatesAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val card: View = view.findViewById(R.id.cardTemplate)
         val title: TextView = view.findViewById(R.id.tvTemplateTitle)
         val desc: TextView = view.findViewById(R.id.tvTemplateDesc)
         val badge: TextView = view.findViewById(R.id.tvTemplateBadge)
@@ -29,6 +30,8 @@ class TemplatesAdapter(
         holder.title.text = item.title
         holder.desc.text = item.description
         holder.badge.text = item.badge
+
+        holder.card.setOnClickListener { onSelected(item) }
         holder.itemView.setOnClickListener { onSelected(item) }
     }
 

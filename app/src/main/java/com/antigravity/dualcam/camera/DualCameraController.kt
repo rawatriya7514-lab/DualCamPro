@@ -3,7 +3,6 @@ package com.antigravity.dualcam.camera
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import android.view.View
 import androidx.camera.core.CameraInfo
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ConcurrentCamera
@@ -16,6 +15,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.antigravity.dualcam.model.LayoutMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -68,15 +68,17 @@ class DualCameraController(
     }
 
     private fun bindDualCameraMode(mode: LayoutMode, onModeChanged: (LayoutMode) -> Unit) {
+        // 1. Immediately notify UI so layouts partition 50/50 and views become visible before surface binding
+        onModeChanged(mode)
+
         val targetSecondaryPreview = if (mode.isPiP) pipPreview else splitPreview
 
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
             try {
                 val provider = cameraProviderFuture.get()
-                provider.unbindAll()
 
-                // Query CameraX availableConcurrentCameraInfos
+                // Check CameraX availableConcurrentCameraInfos
                 val concurrentInfosList = provider.availableConcurrentCameraInfos
                 var matchingCombo: List<CameraInfo>? = null
 
@@ -89,60 +91,47 @@ class DualCameraController(
                     }
                 }
 
-                val primarySelector: CameraSelector
-                val secondarySelector: CameraSelector
-
                 if (matchingCombo != null) {
+                    provider.unbindAll()
+
                     val backCameraInfo = matchingCombo.first { it.lensFacing == CameraSelector.LENS_FACING_BACK }
                     val frontCameraInfo = matchingCombo.first { it.lensFacing == CameraSelector.LENS_FACING_FRONT }
 
-                    if (mode == LayoutMode.PIP_REAR_ON_FRONT) {
-                        primarySelector = frontCameraInfo.cameraSelector
-                        secondarySelector = backCameraInfo.cameraSelector
-                    } else {
-                        primarySelector = backCameraInfo.cameraSelector
-                        secondarySelector = frontCameraInfo.cameraSelector
+                    val primarySelector = if (mode == LayoutMode.PIP_REAR_ON_FRONT) frontCameraInfo.cameraSelector else backCameraInfo.cameraSelector
+                    val secondarySelector = if (mode == LayoutMode.PIP_REAR_ON_FRONT) backCameraInfo.cameraSelector else frontCameraInfo.cameraSelector
+
+                    val primaryPreviewUseCase = Preview.Builder().build().also {
+                        it.setSurfaceProvider(primaryPreview.surfaceProvider)
                     }
+
+                    val secondaryPreviewUseCase = Preview.Builder().build().also {
+                        it.setSurfaceProvider(targetSecondaryPreview.surfaceProvider)
+                    }
+
+                    val primaryConfig = ConcurrentCamera.SingleCameraConfig(
+                        primarySelector,
+                        UseCaseGroup.Builder().addUseCase(primaryPreviewUseCase).build(),
+                        lifecycleOwner
+                    )
+
+                    val secondaryConfig = ConcurrentCamera.SingleCameraConfig(
+                        secondarySelector,
+                        UseCaseGroup.Builder().addUseCase(secondaryPreviewUseCase).build(),
+                        lifecycleOwner
+                    )
+
+                    concurrentCameraSession = provider.bindToLifecycle(listOf(primaryConfig, secondaryConfig))
+                    isHardwareDualStreamingActive = true
+                    Log.i(TAG, "Hardware ConcurrentCamera bound successfully! Streaming both cameras simultaneously.")
+                    onModeChanged(mode)
                 } else {
-                    // Fallback to standard lens facing selectors
-                    if (mode == LayoutMode.PIP_REAR_ON_FRONT) {
-                        primarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
-                        secondarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
-                    } else {
-                        primarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
-                        secondarySelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_FRONT).build()
-                    }
+                    // No hardware concurrent combination exposed by device HAL -> activate Live Dual-Angle interactive pipeline
+                    isHardwareDualStreamingActive = false
+                    bindDualTakeDuoFallback()
+                    onModeChanged(mode)
                 }
-
-                // Primary Preview UseCase
-                val primaryPreviewUseCase = Preview.Builder().build().also {
-                    it.setSurfaceProvider(primaryPreview.surfaceProvider)
-                }
-
-                // Secondary Preview UseCase
-                val secondaryPreviewUseCase = Preview.Builder().build().also {
-                    it.setSurfaceProvider(targetSecondaryPreview.surfaceProvider)
-                }
-
-                val primaryConfig = ConcurrentCamera.SingleCameraConfig(
-                    primarySelector,
-                    UseCaseGroup.Builder().addUseCase(primaryPreviewUseCase).build(),
-                    lifecycleOwner
-                )
-
-                val secondaryConfig = ConcurrentCamera.SingleCameraConfig(
-                    secondarySelector,
-                    UseCaseGroup.Builder().addUseCase(secondaryPreviewUseCase).build(),
-                    lifecycleOwner
-                )
-
-                // Attempt official CameraX Concurrent Dual Camera binding
-                concurrentCameraSession = provider.bindToLifecycle(listOf(primaryConfig, secondaryConfig))
-                isHardwareDualStreamingActive = true
-                Log.i(TAG, "Hardware ConcurrentCamera bound successfully! Streaming both cameras simultaneously.")
-                onModeChanged(mode)
             } catch (e: Exception) {
-                Log.w(TAG, "Hardware ConcurrentCamera unavailable on this SoC HAL (${e.message}). Activating Live Dual-Take Duo engine.")
+                Log.w(TAG, "ConcurrentCamera binding exception on this device HAL (${e.message}). Activating Dual-Angle Duo mode.")
                 isHardwareDualStreamingActive = false
                 bindDualTakeDuoFallback()
                 onModeChanged(mode)
@@ -155,10 +144,11 @@ class DualCameraController(
      * Binds active primary camera to main preview and captures high-res snapshot of opposite camera for PiP/Split view.
      */
     private fun bindDualTakeDuoFallback() {
-        // Bind primary camera to main preview view
+        // Ensure primary camera is bound and active
         singleCameraController.bindCamera(singleCameraController.currentLensFacing)
 
         CoroutineScope(Dispatchers.Main).launch {
+            delay(300)
             try {
                 val currentBmp = primaryPreview.bitmap
                 if (currentBmp != null) {

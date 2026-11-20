@@ -39,6 +39,10 @@
         android:id="@+id/secondarySplitContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:background="#14161D"
+        android:clickable="true"
+        android:elevation="2dp"
+        android:focusable="true"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -58,6 +62,37 @@
             android:scaleType="centerCrop"
             android:visibility="gone" />
 
+        <!-- Interactive Secondary Camera Hint Overlay (shown when single-stream HAL active) -->
+        <LinearLayout
+            android:id="@+id/splitInteractiveOverlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_glass_pill"
+                android:padding="10dp"
+                android:src="@drawable/ic_flip_cam"
+                app:tint="@color/accent_gold" />
+
+            <TextView
+                android:id="@+id/tvSplitHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_glass_pill"
+                android:fontFamily="sans-serif-medium"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="5dp"
+                android:text="TAP TO SWITCH ANGLE"
+                android:textColor="@color/accent_gold"
+                android:textSize="11sp" />
+        </LinearLayout>
+
         <!-- Accent Border Line for Split View -->
         <View
             android:layout_width="match_parent"
@@ -71,7 +106,7 @@
         android:id="@+id/ivSwitchTransition"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:elevation="2dp"
+        android:elevation="4dp"
         android:scaleType="centerCrop"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"

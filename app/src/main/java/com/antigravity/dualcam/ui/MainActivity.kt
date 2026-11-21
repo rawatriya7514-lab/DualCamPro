@@ -134,7 +134,7 @@ class MainActivity : AppCompatActivity() {
         cameraCapabilities = CameraManagerHelper.queryDeviceCapabilities(this)
         updateHardwareAuditBadge()
 
-        // 2. Setup Single & Dual Camera Controllers
+        // 2. Setup Single Camera Controller (Primary stream & recorder)
         singleCameraController = SingleCameraController(
             context = this,
             lifecycleOwner = this,
@@ -150,28 +150,34 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
+        // 3. Setup Dual Camera Controller (Genuine Hardware Concurrent Camera2 Engine)
         dualCameraController = DualCameraController(
             context = this,
-            lifecycleOwner = this,
-            primaryPreview = binding.primaryPreview,
-            pipPreview = binding.pipPreview,
-            splitPreview = binding.secondarySplitPreview,
             singleCameraController = singleCameraController,
+            pipTexture = binding.pipTexture,
+            splitTexture = binding.secondarySplitTexture,
             capabilities = cameraCapabilities,
             onSecondarySnapshotReady = { bitmap ->
                 runOnUiThread {
-                    if (!dualCameraController.isHardwareDualStreamingActive) {
-                        binding.ivPipSnapshot.setImageBitmap(bitmap)
-                        binding.ivPipSnapshot.visibility = View.VISIBLE
-                        binding.ivSplitSnapshot.setImageBitmap(bitmap)
-                        binding.ivSplitSnapshot.visibility = View.VISIBLE
+                    binding.ivPipSnapshot.setImageBitmap(bitmap)
+                    binding.ivPipSnapshot.visibility = View.VISIBLE
+                    binding.ivSplitSnapshot.setImageBitmap(bitmap)
+                    binding.ivSplitSnapshot.visibility = View.VISIBLE
+                    binding.splitInteractiveOverlay.visibility = View.GONE
+                }
+            },
+            onHardwareDualStateChanged = { isStreaming ->
+                runOnUiThread {
+                    if (isStreaming) {
+                        binding.ivPipSnapshot.visibility = View.GONE
+                        binding.ivSplitSnapshot.visibility = View.GONE
                         binding.splitInteractiveOverlay.visibility = View.GONE
                     }
                 }
             }
         )
 
-        // 3. Initialize CameraX
+        // 4. Initialize CameraX for primary camera
         singleCameraController.initialize {
             runOnUiThread {
                 updateStorageInfo()
@@ -179,7 +185,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 4. Setup Audio dB Monitor
+        // 5. Setup Audio dB Monitor
         audioLevelMonitor = AudioLevelMonitor { db, normalized ->
             runOnUiThread {
                 binding.audioVisualizer.updateLevel(db, normalized)
@@ -187,7 +193,7 @@ class MainActivity : AppCompatActivity() {
         }
         audioLevelMonitor?.start()
 
-        // 5. Wire UI controls
+        // 6. Wire UI controls
         setupPrimaryControls()
         setupProDrawerControls()
         setupTouchFocusAndGestures()
@@ -316,7 +322,6 @@ class MainActivity : AppCompatActivity() {
      * Prevents black screens, flickering, and dropped frames during both preview and active recording.
      */
     private fun performLiveCameraSwitch() {
-        // 1. Capture snapshot of current frame before switching
         val snapshot = binding.primaryPreview.bitmap
         if (snapshot != null) {
             binding.ivSwitchTransition.setImageBitmap(snapshot)
@@ -326,7 +331,6 @@ class MainActivity : AppCompatActivity() {
             binding.ivSwitchTransition.scaleX = 1f
             binding.ivSwitchTransition.scaleY = 1f
 
-            // Update secondary snapshot so the opposite angle displays this frame
             binding.ivPipSnapshot.setImageBitmap(snapshot)
             binding.ivSplitSnapshot.setImageBitmap(snapshot)
             binding.ivPipSnapshot.visibility = View.VISIBLE
@@ -334,28 +338,23 @@ class MainActivity : AppCompatActivity() {
             binding.splitInteractiveOverlay.visibility = View.GONE
         }
 
-        // 2. Animate flip icon rotation
         binding.ivFlipIcon.animate()
             .rotationBy(180f)
             .setDuration(350)
             .start()
 
-        // 3. Set camera distance perspective for 3D card rotation
         val distance = 6000f * resources.displayMetrics.density
         binding.ivSwitchTransition.cameraDistance = distance
         binding.primaryPreview.cameraDistance = distance
 
-        // 4. Animate flip 0 -> 90 degrees (folding away)
         binding.ivSwitchTransition.animate()
             .rotationY(90f)
             .scaleX(0.92f)
             .scaleY(0.92f)
             .setDuration(160)
             .withEndAction {
-                // At apex of fold (invisible), trigger camera switch
                 singleCameraController.switchCamera {
                     runOnUiThread {
-                        // 5. Unfold from -90 -> 0 degrees displaying new live feed
                         binding.ivSwitchTransition.rotationY = -90f
                         binding.ivSwitchTransition.animate()
                             .rotationY(0f)
@@ -369,6 +368,13 @@ class MainActivity : AppCompatActivity() {
                                 binding.ivSwitchTransition.rotationY = 0f
                             }
                             .start()
+
+                        // Re-sync secondary stream if in dual mode
+                        if (currentCameraState.layoutMode.isDual) {
+                            dualCameraController.setLayoutMode(currentCameraState.layoutMode) { mode ->
+                                updateLayoutVisibility(mode)
+                            }
+                        }
                     }
                 }
             }
@@ -502,11 +508,17 @@ class MainActivity : AppCompatActivity() {
         val timerSec = currentCameraState.timerSeconds
         if (timerSec > 0) {
             startCountdown(timerSec) {
-                singleCameraController.startRecording()
+                startRecordingSafely()
             }
         } else {
-            singleCameraController.startRecording()
+            startRecordingSafely()
         }
+    }
+
+    private fun startRecordingSafely() {
+        // Crucial: Release AudioLevelMonitor MIC lock before CameraX VideoCapture opens AudioSource.MIC!
+        audioLevelMonitor?.stop()
+        singleCameraController.startRecording()
     }
 
     private fun startCountdown(seconds: Int, onComplete: () -> Unit) {
@@ -558,16 +570,12 @@ class MainActivity : AppCompatActivity() {
                 binding.btnPauseResume.setImageResource(R.drawable.ic_play)
                 binding.recDot.clearAnimation()
             }
-            RecordingState.FINALIZING -> {
+            RecordingState.FINALIZING, RecordingState.IDLE -> {
                 binding.recordingBanner.visibility = View.GONE
                 binding.recDot.clearAnimation()
                 binding.recordInner.setBackgroundResource(R.drawable.btn_record_inner)
-                Toast.makeText(this, "Finalizing recording...", Toast.LENGTH_SHORT).show()
-            }
-            RecordingState.IDLE -> {
-                binding.recordingBanner.visibility = View.GONE
-                binding.recDot.clearAnimation()
-                binding.recordInner.setBackgroundResource(R.drawable.btn_record_inner)
+                // Resume audio level monitoring now that recording is finished
+                audioLevelMonitor?.start()
             }
             else -> {}
         }
@@ -672,7 +680,7 @@ class MainActivity : AppCompatActivity() {
             LayoutMode.SINGLE_REAR -> "REAR"
         }
 
-        // Apply Zoom preset (Travel mode sets 0.5x ultrawide, others default to 1.0x)
+        // Apply Zoom preset
         if (template.id == RecordingTemplate.TemplateId.TRAVEL) {
             applyZoom(0.5f, binding.btnZoomWide)
         } else {
@@ -684,20 +692,27 @@ class MainActivity : AppCompatActivity() {
             applyPiPPosition(template.pipConfig)
         }
 
-        // Configure Camera Settings
+        // Configure single camera controller settings
         singleCameraController.activeResolution = template.resolution
         singleCameraController.isMicEnabled = template.isMicEnabled
 
-        // Camera lens facing switch if single front or single rear requested
-        if (template.layoutMode == LayoutMode.SINGLE_FRONT && singleCameraController.currentLensFacing != CameraSelector.LENS_FACING_FRONT) {
-            performLiveCameraSwitch()
-        } else if (template.layoutMode == LayoutMode.SINGLE_REAR && singleCameraController.currentLensFacing != CameraSelector.LENS_FACING_BACK) {
-            performLiveCameraSwitch()
-        }
-
-        // Apply Layout Mode via DualCameraController
-        dualCameraController.setLayoutMode(template.layoutMode) { mode ->
-            updateLayoutVisibility(mode)
+        // Cleanly switch layout mode without race conditions
+        when (template.layoutMode) {
+            LayoutMode.SINGLE_FRONT -> {
+                dualCameraController.stopDualStreaming()
+                singleCameraController.bindCamera(CameraSelector.LENS_FACING_FRONT)
+                updateLayoutVisibility(template.layoutMode)
+            }
+            LayoutMode.SINGLE_REAR -> {
+                dualCameraController.stopDualStreaming()
+                singleCameraController.bindCamera(CameraSelector.LENS_FACING_BACK)
+                updateLayoutVisibility(template.layoutMode)
+            }
+            else -> {
+                dualCameraController.setLayoutMode(template.layoutMode) { mode ->
+                    updateLayoutVisibility(mode)
+                }
+            }
         }
 
         Toast.makeText(this, "Applied: ${template.title}", Toast.LENGTH_SHORT).show()
@@ -830,12 +845,10 @@ class MainActivity : AppCompatActivity() {
         applyLayoutModeConstraints(mode)
 
         if (dualCameraController.isHardwareDualStreamingActive) {
-            // Live concurrent hardware streaming -> hide all static snapshot overlays
             binding.ivPipSnapshot.visibility = View.GONE
             binding.ivSplitSnapshot.visibility = View.GONE
             binding.splitInteractiveOverlay.visibility = View.GONE
         } else {
-            // Dual-Angle Interactive mode
             if (mode.isPiP) {
                 binding.pipContainer.visibility = View.VISIBLE
             } else if (mode.isSplit) {
@@ -912,6 +925,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        dualCameraController.stopDualStreaming()
         audioLevelMonitor?.stop()
         toneGen?.release()
     }

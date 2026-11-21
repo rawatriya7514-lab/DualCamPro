@@ -317,6 +317,10 @@ class SingleCameraController(
         camera?.cameraControl?.startFocusAndMetering(action)
     }
 
+    fun captureCurrentBitmap(): android.graphics.Bitmap? {
+        return previewView.bitmap
+    }
+
     companion object {
         private const val TAG = "SingleCameraController"
     }

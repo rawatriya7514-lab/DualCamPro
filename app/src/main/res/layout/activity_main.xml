@@ -49,11 +49,11 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/guidelineCenterH">
 
-        <androidx.camera.view.PreviewView
-            android:id="@+id/secondarySplitPreview"
+        <!-- Live Camera2 Secondary Video Stream -->
+        <TextureView
+            android:id="@+id/secondarySplitTexture"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:scaleType="fillCenter" />
+            android:layout_height="match_parent" />
 
         <ImageView
             android:id="@+id/ivSplitSnapshot"
@@ -137,11 +137,11 @@
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp">
 
-            <androidx.camera.view.PreviewView
-                android:id="@+id/pipPreview"
+            <!-- Live Camera2 PiP Video Stream -->
+            <TextureView
+                android:id="@+id/pipTexture"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:scaleType="fillCenter" />
+                android:layout_height="match_parent" />
 
             <ImageView
                 android:id="@+id/ivPipSnapshot"
@@ -180,23 +180,27 @@
         </androidx.cardview.widget.CardView>
     </FrameLayout>
 
-    <!-- Grid Lines Overlay View -->
+    <!-- Grid Lines Overlay View (non-clickable passthrough) -->
     <com.antigravity.dualcam.ui.GridOverlayView
         android:id="@+id/gridOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:clickable="false"
         android:elevation="3dp"
+        android:focusable="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Focus & Exposure Reticle View -->
+    <!-- Focus & Exposure Reticle View (non-clickable passthrough) -->
     <com.antigravity.dualcam.ui.FocusReticleView
         android:id="@+id/focusReticle"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:clickable="false"
         android:elevation="4dp"
+        android:focusable="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
